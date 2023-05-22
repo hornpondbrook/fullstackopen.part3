@@ -1,5 +1,6 @@
-const { response } = require('express')
+const { response, json } = require('express')
 const express = require('express')
+const morgan = require('morgan')
 const app = express()
 
 let persons = [
@@ -27,6 +28,43 @@ let persons = [
 
 const getID = () => Math.floor(Math.random() * 1000000)
 
+// app.use(morgan('tiny'))
+// Define a custom token for logging the colored status code
+morgan.token('colored-status', (req, res) => {
+    const status = res.statusCode;
+    let color;
+
+    if (status >= 500) {
+        color = '\x1b[31m'; // Red
+    } else if (status >= 400) {
+        color = '\x1b[33m'; // Yellow
+    } else if (status >= 300) {
+        color = '\x1b[36m'; // Cyan
+    } else {
+        color = '\x1b[32m'; // Green
+    }
+
+    return color + status + '\x1b[0m'; // Reset color
+});
+morgan.token('data', (req, res) => {
+    if (req.method === 'POST') {
+        return JSON.stringify(req.body)
+    } else {
+        return ''
+    }
+})
+// app.use(morgan(':method :url :status :res[content-length] - :response-time ms - :data'))
+app.use(morgan((tokens, req, res) => {
+    return [
+        tokens.method(req, res),
+        tokens.url(req, res),
+        // tokens.status(req, res),
+        tokens['colored-status'](req, res),
+        tokens.res(req, res, 'content-length'), '-',
+        tokens['response-time'](req, res), 'ms',
+        tokens.data(req, res)
+    ].join(' ')
+}))
 app.use(express.json())
 
 app.get('/', (request, response) => {
@@ -78,7 +116,7 @@ app.post('/api/persons', (request, response) => {
     if (persons.find(person => person.name === body.name)) {
         return response.status(400).json({
             error: 'name must be unique'
-        })        
+        })
     }
 
     const person = {
@@ -86,7 +124,6 @@ app.post('/api/persons', (request, response) => {
         number: body.number,
         id: getID()
     }
-    
     persons = persons.concat(person)
 
     response.json(person)
